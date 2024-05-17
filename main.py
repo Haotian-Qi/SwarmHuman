@@ -3,98 +3,107 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
 # Hyperparameters
-num_particles = 90
-map_size = 200
-perception_field = 100
-move_speed = 1
-update_interval = 20
-collision_distance = 5  # Minimum distance between particles to prevent overlap
+NUM_PARTICLES = 100
+MAP_SIZE = 1000
+PERCEPTION_FIELD = 1000
+MOVE_SPEED = 3
+UPDATE_INTERVAL = 10
+COLLISION_DISTANCE = 0  # Minimum distance between particles to prevent overlap
+SCENARIO = 1
 
 # Initialize particles
-positions = np.random.rand(num_particles, 2) * map_size
-colors = np.random.rand(num_particles) * 0.75 + 0.25  # Grayscale colors
-colors = np.tile(colors, (3, 1)).T
+positions = np.random.rand(NUM_PARTICLES, 2) * MAP_SIZE
 
 # Store targets for each particle
-targets = np.full((num_particles, 2), -1, dtype=int)
+targets = np.full((NUM_PARTICLES, 2), -1, dtype=int)
 
-# Function to calculate distance
 def distance(p1, p2):
+    """Calculate Euclidean distance between two points."""
     return np.linalg.norm(p1 - p2)
 
-# Function to find two random particles within the perception field and store them
 def find_targets():
-    for i in range(num_particles):
-        candidates = [j for j in range(num_particles) if j != i and distance(positions[i], positions[j]) <= perception_field]
+    """Find two random particles within the perception field for each particle."""
+    for i in range(NUM_PARTICLES):
+        candidates = [j for j in range(NUM_PARTICLES) if j != i]
         if len(candidates) >= 2:
             targets[i] = np.random.choice(candidates, 2, replace=False)
 
-# Function to move particles according to scenario
 def move_particles(scenario):
-    global positions
+    """Move particles according to the given scenario."""
     new_positions = positions.copy()
-    for i in range(num_particles):
+    for i in range(NUM_PARTICLES):
         if targets[i, 0] == -1 or targets[i, 1] == -1:
             continue
         A_idx, B_idx = targets[i]
-        A = positions[A_idx]
-        B = positions[B_idx]
+        A, B = positions[A_idx], positions[B_idx]
         
-        if scenario == 1:
-            target = (A + B) / 2
-        elif scenario == 2:
-            target = 2 * B - A
+        # Check if both A and B are within the perception field
+        if distance(positions[i], A) > PERCEPTION_FIELD or distance(positions[i], B) > PERCEPTION_FIELD:
+            continue
         
+        target = (A + B) / 2 if scenario == 1 else 2 * B - A
         direction = target - positions[i]
-        if np.linalg.norm(direction) > 0:  # Check if the direction vector is non-zero
-            distance_to_move = min(move_speed, np.linalg.norm(direction))
-            direction = direction / np.linalg.norm(direction) * distance_to_move
-            new_position = positions[i] + direction
+        if np.linalg.norm(direction) > 0:
+            distance_to_move = min(MOVE_SPEED, np.linalg.norm(direction))
+            new_position = positions[i] + (direction / np.linalg.norm(direction)) * distance_to_move
 
-            # Check if the new position is within boundaries
-            new_position[0] = min(max(new_position[0], 0), map_size)
-            new_position[1] = min(max(new_position[1], 0), map_size)
+            # Ensure new position is within boundaries
+            new_position = np.clip(new_position, 0, MAP_SIZE)
+            
+            # Check for collisions and adjust if necessary
+            if COLLISION_DISTANCE > 0:
+                for j in range(NUM_PARTICLES):
+                    if i != j and distance(new_position, new_positions[j]) < COLLISION_DISTANCE:
+                        distance_to_collision = distance(positions[i], new_positions[j]) - COLLISION_DISTANCE
+                        if distance_to_collision < distance_to_move:
+                            distance_to_move = distance_to_collision
+                            new_position = positions[i] + (direction / np.linalg.norm(direction)) * distance_to_move
 
-            new_positions[i] = new_position
+            new_positions[i] = np.clip(new_position, 0, MAP_SIZE)
 
-    # Prevent overlap by adjusting positions
-    for i in range(num_particles):
-        for j in range(i + 1, num_particles):
-            while distance(new_positions[i], new_positions[j]) < collision_distance:
-                direction = new_positions[i] - new_positions[j]
-                if np.linalg.norm(direction) > 0:
-                    direction = direction / np.linalg.norm(direction) * collision_distance
-                    new_positions[i] += direction / 2
-                    new_positions[j] -= direction / 2
-                else:
-                    # If particles overlap completely, move one of them randomly
-                    new_positions[i] += np.random.rand(2) * collision_distance
-                    new_positions[j] -= np.random.rand(2) * collision_distance
+    return new_positions
 
-    positions = new_positions
+def get_labels():
+    """Get indices of particles to be labeled as S, A, and B."""
+    s_idx = 0
+    a_idx, b_idx = targets[0]
+    return s_idx, a_idx, b_idx
+
+def update_scat(scat, excluded_indices):
+    """Update scatter plot excluding certain indices."""
+    included_indices = [i for i in range(NUM_PARTICLES) if i not in excluded_indices]
+    scat.set_offsets(positions[included_indices])
+
+def update(frame_num, scat, text_s, text_a, text_b):
+    """Animation update function."""
+    global positions
+    positions = move_particles(SCENARIO)
+    s_idx, a_idx, b_idx = get_labels()
+    
+    update_scat(scat, [s_idx, a_idx, b_idx])
+    text_s.set_position(positions[s_idx])
+    if text_a:
+        text_a.set_position(positions[a_idx])
+    if text_b:
+        text_b.set_position(positions[b_idx])
+
+    return scat, text_s, text_a, text_b
 
 # Initialize targets once at the beginning
 find_targets()
 
-# Set specific colors for the first particle and its targets
-colors[0] = [1, 0, 0]  # Red
-if targets[0, 0] != -1:
-    colors[targets[0, 0]] = [0, 1, 0]  # Red
-if targets[0, 1] != -1:
-    colors[targets[0, 1]] = [0, 0, 1]  # Blue
-
 # Plot initialization
 fig, ax = plt.subplots()
-scat = ax.scatter(positions[:, 0], positions[:, 1], c=colors)
-ax.set_xlim(0, map_size)
-ax.set_ylim(0, map_size)
+scat = ax.scatter(positions[:, 0], positions[:, 1], facecolors='none', edgecolors='gray')
+ax.set_xlim(-100, MAP_SIZE+100)
+ax.set_ylim(-100, MAP_SIZE+100)
 
-# Animation function
-def update(frame_num):
-    move_particles(2)
-    scat.set_offsets(positions)
-    return scat,
+# Add text annotations for S, A, and B
+s_idx, a_idx, b_idx = get_labels()
+text_s = ax.text(*positions[s_idx], 'S', color='red', fontsize=12, ha='center', va='center')
+text_a = ax.text(*positions[a_idx], 'A', color='green', fontsize=12, ha='center', va='center') if a_idx != -1 else None
+text_b = ax.text(*positions[b_idx], 'B', color='blue', fontsize=12, ha='center', va='center') if b_idx != -1 else None
 
 # Run animation
-ani = animation.FuncAnimation(fig, update, interval=update_interval, blit=True, cache_frame_data=False)
+ani = animation.FuncAnimation(fig, update, fargs=(scat, text_s, text_a, text_b), interval=UPDATE_INTERVAL, blit=True, cache_frame_data=False)
 plt.show()
