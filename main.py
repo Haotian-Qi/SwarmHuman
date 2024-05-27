@@ -3,13 +3,14 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
 # Hyperparameters
-NUM_PARTICLES = 100
+NUM_PARTICLES = 10
 MAP_SIZE = 1000
 PERCEPTION_FIELD = 1000
-MOVE_SPEED = 3
+MOVE_SPEED = 0.05 # if no norm, use 0.05 or 0.01
 UPDATE_INTERVAL = 10
 COLLISION_DISTANCE = 0  # Minimum distance between particles to prevent overlap
 SCENARIO = 1
+USE_NORMALIZATION = False  # Set this to False to disable normalization
 
 # Initialize particles
 positions = np.random.rand(NUM_PARTICLES, 2) * MAP_SIZE
@@ -24,7 +25,7 @@ def distance(p1, p2):
 def find_targets():
     """Find two random particles within the perception field for each particle."""
     for i in range(NUM_PARTICLES):
-        candidates = [j for j in range(NUM_PARTICLES) if j != i]
+        candidates = [j for j in range(NUM_PARTICLES) if j != i and distance(positions[i], positions[j]) <= PERCEPTION_FIELD]
         if len(candidates) >= 2:
             targets[i] = np.random.choice(candidates, 2, replace=False)
 
@@ -41,25 +42,44 @@ def move_particles(scenario):
         if distance(positions[i], A) > PERCEPTION_FIELD or distance(positions[i], B) > PERCEPTION_FIELD:
             continue
         
-        target = (A + B) / 2 if scenario == 1 else 2 * B - A
-        direction = target - positions[i]
-        if np.linalg.norm(direction) > 0:
-            distance_to_move = min(MOVE_SPEED, np.linalg.norm(direction))
-            new_position = positions[i] + (direction / np.linalg.norm(direction)) * distance_to_move
+        if scenario == 1:
+            # Scenario A: Move towards the direction between A and B
+            midpoint = (A + B) / 2
+            direction = midpoint - positions[i]
+        else:
+            direction_AB = B - A
+            if np.linalg.norm(direction_AB) > 0:
+                unit_direction_AB = direction_AB / np.linalg.norm(direction_AB)
+                new_target = B + unit_direction_AB*30
+                direction = new_target - positions[i]
 
-            # Ensure new position is within boundaries
-            new_position = np.clip(new_position, 0, MAP_SIZE)
-            
-            # Check for collisions and adjust if necessary
-            if COLLISION_DISTANCE > 0:
-                for j in range(NUM_PARTICLES):
-                    if i != j and distance(new_position, new_positions[j]) < COLLISION_DISTANCE:
-                        distance_to_collision = distance(positions[i], new_positions[j]) - COLLISION_DISTANCE
-                        if distance_to_collision < distance_to_move:
-                            distance_to_move = distance_to_collision
-                            new_position = positions[i] + (direction / np.linalg.norm(direction)) * distance_to_move
+        if USE_NORMALIZATION:
+            if np.linalg.norm(direction) > 0:
+                move_x, move_y = (direction / np.linalg.norm(direction)) * MOVE_SPEED
+            else:
+                move_x, move_y = 0, 0
+        else:
+            move_x, move_y = direction * MOVE_SPEED
 
-            new_positions[i] = np.clip(new_position, 0, MAP_SIZE)
+        new_position = positions[i] + np.array([move_x, move_y])
+
+        # Ensure new position is within boundaries
+        new_position = np.clip(new_position, 0, MAP_SIZE)
+        
+        # Check for collisions and adjust if necessary
+        if COLLISION_DISTANCE > 0:
+            for j in range(NUM_PARTICLES):
+                if i != j and distance(new_position, new_positions[j]) < COLLISION_DISTANCE:
+                    distance_to_collision = distance(positions[i], new_positions[j]) - COLLISION_DISTANCE
+                    if distance_to_collision < MOVE_SPEED:
+                        if USE_NORMALIZATION:
+                            move_x, move_y = (direction / np.linalg.norm(direction)) * distance_to_collision
+                        else:
+                            move_x, move_y = direction * distance_to_collision
+                        new_position = positions[i] + np.array([move_x, move_y])
+                        new_position = np.clip(new_position, 0, MAP_SIZE)
+
+        new_positions[i] = new_position
 
     return new_positions
 
