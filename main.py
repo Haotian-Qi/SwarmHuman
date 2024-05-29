@@ -3,14 +3,14 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
 # Hyperparameters
-NUM_PARTICLES = 10
+NUM_PARTICLES = 30
 MAP_SIZE = 1000
 PERCEPTION_FIELD = 500
-MOVE_SPEED = 3 # if no norm, use 0.05 or 0.01
+MOVE_SPEED = 0.05 # if no norm, use 0.05 or 0.01
 UPDATE_INTERVAL = 10
 COLLISION_DISTANCE = 0  # Minimum distance between particles to prevent overlap
-SCENARIO = 2
-USE_NORMALIZATION = True  # Set this to False to disable normalization
+SCENARIO = 1
+USE_NORMALIZATION = False  # Set this to False to disable normalization
 
 # Initialize particles
 positions = np.random.rand(NUM_PARTICLES, 2) * MAP_SIZE
