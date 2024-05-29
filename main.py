@@ -5,18 +5,21 @@ import matplotlib.animation as animation
 # Hyperparameters
 NUM_PARTICLES = 10
 MAP_SIZE = 1000
-PERCEPTION_FIELD = 1000
-MOVE_SPEED = 0.05 # if no norm, use 0.05 or 0.01
+PERCEPTION_FIELD = 500
+MOVE_SPEED = 3 # if no norm, use 0.05 or 0.01
 UPDATE_INTERVAL = 10
 COLLISION_DISTANCE = 0  # Minimum distance between particles to prevent overlap
-SCENARIO = 1
-USE_NORMALIZATION = False  # Set this to False to disable normalization
+SCENARIO = 2
+USE_NORMALIZATION = True  # Set this to False to disable normalization
 
 # Initialize particles
 positions = np.random.rand(NUM_PARTICLES, 2) * MAP_SIZE
 
 # Store targets for each particle
 targets = np.full((NUM_PARTICLES, 2), -1, dtype=int)
+
+# Initialize trace trail for S
+s_trace = []
 
 def distance(p1, p2):
     """Calculate Euclidean distance between two points."""
@@ -50,7 +53,7 @@ def move_particles(scenario):
             direction_AB = B - A
             if np.linalg.norm(direction_AB) > 0:
                 unit_direction_AB = direction_AB / np.linalg.norm(direction_AB)
-                new_target = B + unit_direction_AB*30
+                new_target = B + unit_direction_AB * 30
                 direction = new_target - positions[i]
 
         if USE_NORMALIZATION:
@@ -94,9 +97,9 @@ def update_scat(scat, excluded_indices):
     included_indices = [i for i in range(NUM_PARTICLES) if i not in excluded_indices]
     scat.set_offsets(positions[included_indices])
 
-def update(frame_num, scat, text_s, text_a, text_b):
+def update(frame_num, scat, text_s, text_a, text_b, line):
     """Animation update function."""
-    global positions
+    global positions, s_trace
     positions = move_particles(SCENARIO)
     s_idx, a_idx, b_idx = get_labels()
     
@@ -106,8 +109,12 @@ def update(frame_num, scat, text_s, text_a, text_b):
         text_a.set_position(positions[a_idx])
     if text_b:
         text_b.set_position(positions[b_idx])
+    
+    # Update trace trail
+    s_trace.append(positions[s_idx])
+    line.set_data(np.array(s_trace)[:, 0], np.array(s_trace)[:, 1])
 
-    return scat, text_s, text_a, text_b
+    return scat, text_s, text_a, text_b, line
 
 # Initialize targets once at the beginning
 find_targets()
@@ -115,8 +122,8 @@ find_targets()
 # Plot initialization
 fig, ax = plt.subplots()
 scat = ax.scatter(positions[:, 0], positions[:, 1], facecolors='none', edgecolors='gray')
-ax.set_xlim(-100, MAP_SIZE+100)
-ax.set_ylim(-100, MAP_SIZE+100)
+ax.set_xlim(-100, MAP_SIZE + 100)
+ax.set_ylim(-100, MAP_SIZE + 100)
 
 # Add text annotations for S, A, and B
 s_idx, a_idx, b_idx = get_labels()
@@ -124,6 +131,9 @@ text_s = ax.text(*positions[s_idx], 'S', color='red', fontsize=12, ha='center', 
 text_a = ax.text(*positions[a_idx], 'A', color='green', fontsize=12, ha='center', va='center') if a_idx != -1 else None
 text_b = ax.text(*positions[b_idx], 'B', color='blue', fontsize=12, ha='center', va='center') if b_idx != -1 else None
 
+# Initialize line for trace trail
+line, = ax.plot([], [], 'r-', lw=4, alpha=0.5)
+
 # Run animation
-ani = animation.FuncAnimation(fig, update, fargs=(scat, text_s, text_a, text_b), interval=UPDATE_INTERVAL, blit=True, cache_frame_data=False)
+ani = animation.FuncAnimation(fig, update, fargs=(scat, text_s, text_a, text_b, line), interval=UPDATE_INTERVAL, blit=True, cache_frame_data=False)
 plt.show()
